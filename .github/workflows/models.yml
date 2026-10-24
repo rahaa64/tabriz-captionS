@@ -4,7 +4,7 @@ permissions:
   contents: write
 jobs:
   mirror:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Download Whisper int8 models from sherpa-onnx (MIT / Apache-2.0)
