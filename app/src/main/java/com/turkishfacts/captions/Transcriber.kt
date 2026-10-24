@@ -9,7 +9,8 @@ import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.sqrt
 
-data class Caption(val startMs: Long, val endMs: Long, val latin: String, val text: String)
+/** auto = text as generated (before the user edited it); used to learn from corrections. */
+data class Caption(val startMs: Long, val endMs: Long, val latin: String, val text: String, val auto: String = "")
 
 /** Energy-based speech phrases: 0.6–7 s pieces cut at pauses. Returns sample ranges. */
 object Segmenter {

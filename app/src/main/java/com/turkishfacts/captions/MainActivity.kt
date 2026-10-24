@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
     private var cloud by mutableStateOf(false)
     private var apiKey by mutableStateOf("")
+    private var geminiKey by mutableStateOf("")
     private var job: Job? = null
     @Volatile private var cancelFlag = false
 
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
         refreshReady()
         apiKey = prefs.getString("eleven_key", "") ?: ""
         cloud = prefs.getBoolean("cloud", true)
+        geminiKey = prefs.getString("gemini_key", "") ?: ""
         handleShare(intent)
         setContent {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -161,7 +163,24 @@ class MainActivity : ComponentActivity() {
                         }
                     } finally { tr.release() }
                 }
-                caps.clear(); caps.addAll(result); selected = 0
+                var fixed = result
+                var note: String? = null
+                val gk = geminiKey.trim()
+                if (gk.isNotEmpty() && result.isNotEmpty()) {
+                    screen = Screen.Busy("اصلاح هوشمند املا و کلمه‌ها با Gemini…", null)
+                    try {
+                        val lines = withContext(Dispatchers.IO) {
+                            Gemini(gk, prefs.getString("gemini_model", null)) { m -> prefs.edit().putString("gemini_model", m).apply() }
+                                .correct(result)
+                        }
+                        fixed = result.mapIndexed { i, c -> c.copy(text = applyUserWords(c.latin, lines[i])) }
+                    } catch (e: Throwable) {
+                        note = "اصلاح هوشمند انجام نشد (کپشن‌ها بدون آن آماده‌اند):\n${e.message ?: e.javaClass.simpleName}"
+                    }
+                }
+                fixed = fixed.map { it.copy(auto = it.text) }
+                caps.clear(); caps.addAll(fixed); selected = 0
+                if (note != null) message = note
                 if (result.isEmpty()) { message = "گفتاری پیدا نشد."; screen = Screen.Home } else screen = Screen.Editor
             } catch (e: Throwable) {
                 message = "خطا: ${e.message ?: e.javaClass.simpleName}"; screen = Screen.Home
@@ -169,12 +188,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** The user's own corrections always win, also over the AI. */
+    private fun applyUserWords(latin: String, text: String): String {
+        if (converter.userCount() == 0) return text
+        val ws = Regex("\\s+")
+        val lat = latin.split(ws).filter { it.isNotBlank() }
+        val words = text.split(ws).filter { it.isNotBlank() }.toMutableList()
+        if (lat.size != words.size) return text
+        for (i in lat.indices) {
+            val u = converter.userWord(TabrizConverter.key(lat[i]).lowercase()) ?: continue
+            val w = words[i]
+            val lead = w.takeWhile { !it.isLetter() }; val trail = w.takeLastWhile { !it.isLetter() }
+            words[i] = lead + u + trail
+        }
+        return words.joinToString(" ")
+    }
+
     /** Every word the user fixed in the editor is remembered for all future videos. */
     private fun learnFromEdits(): Int {
         val ws = Regex("\\s+")
         var n = 0
         for (c in caps) {
-            val orig = converter.convert(c.latin).second
+            val orig = c.auto.ifEmpty { converter.convert(c.latin).second }
             if (orig == c.text) continue
             val lat = c.latin.split(ws).filter { it.isNotBlank() }
             val ed = c.text.split(ws).filter { it.isNotBlank() }
@@ -260,6 +295,14 @@ class MainActivity : ComponentActivity() {
                         label = { Text("کلید API (elevenlabs.io ← Settings ← API Keys)", fontSize = 12.sp) },
                         singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                 }
+            }
+            Column(Modifier.fillMaxWidth().clip12().background(Card).padding(12.dp)) {
+                Text("اصلاح هوشمند با Gemini (رایگان، اختیاری ولی خیلی توصیه می‌شود)", color = Color.White)
+                Text("املای کلمه‌های فارسی/عربی و نام‌ها و کلمه‌های اشتباه‌شنیده را از روی معنی جمله درست می‌کند. کلید رایگان: aistudio.google.com ← Get API key",
+                    color = Color(0xFFB8C0C8), fontSize = 12.sp)
+                OutlinedTextField(value = geminiKey, onValueChange = { v -> geminiKey = v.trim(); prefs.edit().putString("gemini_key", geminiKey).apply() },
+                    label = { Text("کلید Gemini", fontSize = 12.sp) }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             }
             Text("یا آفلاین روی گوشی (Whisper؛ برای آذری ضعیف‌تر)", color = Color(0xFFB8C0C8), fontSize = 13.sp)
             SpeechModel.values().forEach { m ->

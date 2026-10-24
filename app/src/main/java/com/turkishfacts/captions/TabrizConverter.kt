@@ -27,6 +27,7 @@ class TabrizConverter(json: String) {
     fun learn(latinWord: String, persian: String) { user[latinWord] = persian }
     fun userJson(): String = JSONObject(user as Map<*, *>).toString()
     fun userCount() = user.size
+    fun userWord(k: String): String? = user[k]
 
     init {
         val o = JSONObject(json)
