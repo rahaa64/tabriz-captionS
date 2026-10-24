@@ -6,7 +6,8 @@ plugins {
 
 val modelBaseUrl: String = (project.findProperty("modelBaseUrl") as String?)
     ?: "https://github.com/rahaa64/tabriz-captions/releases/download/models-v1/"
-val ksFile = System.getenv("KEYSTORE_FILE")
+val ksFile = System.getenv("KEYSTORE_FILE")?.takeIf { it.isNotEmpty() } ?: file("release.jks").takeIf { it.exists() }?.path
+fun envOr(k: String, d: String) = System.getenv(k)?.takeIf { it.isNotEmpty() } ?: d
 
 android {
     namespace = "com.turkishfacts.captions"
@@ -23,9 +24,9 @@ android {
     signingConfigs {
         if (ksFile != null) create("release") {
             storeFile = file(ksFile)
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS")
-            keyPassword = System.getenv("KEY_PASSWORD")
+            storePassword = envOr("KEYSTORE_PASSWORD", "tabrizcaptions")
+            keyAlias = envOr("KEY_ALIAS", "tabriz")
+            keyPassword = envOr("KEY_PASSWORD", "tabrizcaptions")
         }
     }
     buildTypes {
