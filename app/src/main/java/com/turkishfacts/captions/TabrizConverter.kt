@@ -64,6 +64,8 @@ class TabrizConverter(json: String) {
             val c = w[i]
             val first = wordInitial && i == 0
             val last = i == n - 1
+            if (c !in VOW && i > 0 && w[i - 1] == c) continue // doubled consonant is written once
+            if (c == 'y' && i > 1 && w[i - 1] == 'i') continue // siyasət -> سیاست
             if (c in VOW) {
                 if (first) { out.append(initial[c] ?: letters[c] ?: ""); continue }
                 if (i > 0 && w[i - 1] in VOW) { out.append(if (c !in "oöuü") "ئ" else "ئو"); continue }

@@ -25,6 +25,10 @@ def letters(w, word_initial=True):
     for i, c in enumerate(w):
         first = word_initial and i == 0
         last = i == n - 1
+        if c not in VOW and i > 0 and w[i - 1] == c:   # doubled consonant (tt, yy, ll) is written once
+            continue
+        if c == 'y' and i > 1 and w[i - 1] == 'i':       # siyasət -> سیاست, xüsusiyyət -> خوسوسیت
+            continue
         if c in VOW:
             if first:
                 out.append(R['initial'].get(c, R['letters'].get(c, '')))

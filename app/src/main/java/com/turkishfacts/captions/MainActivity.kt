@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,6 +72,9 @@ class MainActivity : ComponentActivity() {
     private var maxWords by mutableStateOf(4)
     private var selected by mutableStateOf(0)
     private var message by mutableStateOf<String?>(null)
+    private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
+    private var cloud by mutableStateOf(false)
+    private var apiKey by mutableStateOf("")
     private var job: Job? = null
     @Volatile private var cancelFlag = false
 
@@ -79,6 +83,8 @@ class MainActivity : ComponentActivity() {
         mm = ModelManager(this)
         exporter = Exporter(this)
         refreshReady()
+        apiKey = prefs.getString("eleven_key", "") ?: ""
+        cloud = prefs.getBoolean("cloud", true)
         handleShare(intent)
         setContent {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -97,6 +103,8 @@ class MainActivity : ComponentActivity() {
         else @Suppress("DEPRECATION") i.getParcelableExtra(Intent.EXTRA_STREAM)
         if (u != null) { videoUri = u; screen = Screen.Home }
     }
+
+    private fun setCloud(on: Boolean) { cloud = on; prefs.edit().putBoolean("cloud", on).apply() }
 
     private fun refreshReady() { ready = SpeechModel.values().associateWith { mm.isReady(it) } }
 
@@ -129,9 +137,16 @@ class MainActivity : ComponentActivity() {
         cancelFlag = false; keepAwake(true)
         job = lifecycleScope.launch {
             try {
+                val useCloud = cloud
+                val key = apiKey.trim()
                 val result = withContext(Dispatchers.Default) {
                     screen = Screen.Busy("استخراج صدای ویدیو…", null)
                     val audio = AudioDecoder.decode(this@MainActivity, uri) { p -> screen = Screen.Busy("استخراج صدای ویدیو…", p) }
+                    if (useCloud) {
+                        screen = Screen.Busy("ارسال صدا به ElevenLabs و تشخیص گفتار…\n(به اینترنت نیاز دارد)", null)
+                        val words = withContext(Dispatchers.IO) { Scribe.transcribe(key, audio, AudioDecoder.RATE) }
+                        return@withContext Scribe.toCaptions(words, maxWords, converter)
+                    }
                     screen = Screen.Busy("آماده‌سازی مدل گفتار…", null)
                     val tr = Transcriber(mm, model, converter)
                     try {
@@ -198,15 +213,33 @@ class MainActivity : ComponentActivity() {
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> if (u != null) videoUri = u }
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("کپشن آذری تبریز", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text("ویدیو بده، کپشن ترکی تبریز و ارومیه با خط فارسی و انیمیشن بگیر. همه‌چیز روی خود گوشی، رایگان و بدون اینترنت (به‌جز دانلود اول مدل).",
+            Text("ویدیو بده، کپشن ترکی تبریز و ارومیه با خط فارسی و انیمیشن بگیر.",
                 color = Color(0xFFB8C0C8), fontSize = 14.sp)
-            Text("مدل گفتار", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("تشخیص گفتار", color = Color.White, fontWeight = FontWeight.Bold)
+            Column(Modifier.fillMaxWidth().clip12().background(if (cloud) Color(0xFF2A3038) else Card)
+                .border(1.dp, if (cloud) Accent else Color.Transparent, RoundedCornerShape(12.dp))
+                .clickable { setCloud(true) }.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = cloud, onClick = { setCloud(true) })
+                    Column(Modifier.weight(1f)) {
+                        Text("ElevenLabs Scribe — دقیق‌ترین (آنلاین)", color = Color.White)
+                        Text("با کلید API حساب ElevenLabs خودت؛ هر دقیقه حدود ۳۳۰ اعتبار", color = Color(0xFFB8C0C8), fontSize = 12.sp)
+                    }
+                }
+                if (cloud) {
+                    OutlinedTextField(value = apiKey, onValueChange = { v -> apiKey = v.trim(); prefs.edit().putString("eleven_key", apiKey).apply() },
+                        label = { Text("کلید API (elevenlabs.io ← Settings ← API Keys)", fontSize = 12.sp) },
+                        singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                }
+            }
+            Text("یا آفلاین روی گوشی (Whisper؛ برای آذری ضعیف‌تر)", color = Color(0xFFB8C0C8), fontSize = 13.sp)
             SpeechModel.values().forEach { m ->
                 val ok = ready[m] == true
-                Row(Modifier.fillMaxWidth().clip12().background(if (model == m) Color(0xFF2A3038) else Card)
-                    .border(1.dp, if (model == m) Accent else Color.Transparent, RoundedCornerShape(12.dp))
-                    .clickable { model = m }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = model == m, onClick = { model = m })
+                val on = !cloud && model == m
+                Row(Modifier.fillMaxWidth().clip12().background(if (on) Color(0xFF2A3038) else Card)
+                    .border(1.dp, if (on) Accent else Color.Transparent, RoundedCornerShape(12.dp))
+                    .clickable { model = m; setCloud(false) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = on, onClick = { model = m; setCloud(false) })
                     Column(Modifier.weight(1f)) {
                         Text(m.title, color = Color.White)
                         Text(if (ok) "دانلود شده ✓" else "هنوز دانلود نشده", color = if (ok) Color(0xFF7CD992) else Color(0xFFB8C0C8), fontSize = 12.sp)
@@ -220,10 +253,12 @@ class MainActivity : ComponentActivity() {
             }
             Text("حداکثر کلمه در هر خط: $maxWords", color = Color.White)
             Slider(value = maxWords.toFloat(), onValueChange = { maxWords = it.toInt() }, valueRange = 2f..7f, steps = 4)
-            Button(onClick = { transcribe() }, enabled = videoUri != null && ready[model] == true, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            val canRun = if (cloud) apiKey.isNotBlank() else ready[model] == true
+            Button(onClick = { transcribe() }, enabled = videoUri != null && canRun, modifier = Modifier.fillMaxWidth().height(52.dp)) {
                 Text("ساخت کپشن", fontSize = 18.sp)
             }
-            if (ready[model] != true) Text("اول مدل را دانلود کن (فقط یک بار، بهتر است با وای‌فای).", color = Gold, fontSize = 13.sp)
+            if (cloud && apiKey.isBlank()) Text("کلید API ElevenLabs را وارد کن.", color = Gold, fontSize = 13.sp)
+            if (!cloud && ready[model] != true) Text("اول مدل را دانلود کن (فقط یک بار، بهتر است با وای‌فای).", color = Gold, fontSize = 13.sp)
         }
     }
 
