@@ -62,7 +62,11 @@ sealed class Screen {
 class MainActivity : ComponentActivity() {
     private lateinit var mm: ModelManager
     private lateinit var exporter: Exporter
-    private val converter by lazy { TabrizConverter(assets.open("tabriz_rules.json").readBytes().toString(Charsets.UTF_8)) }
+    private val converter by lazy {
+        TabrizConverter(assets.open("tabriz_rules.json").readBytes().toString(Charsets.UTF_8))
+            .also { it.loadUser(prefs.getString("user_dict", "{}") ?: "{}") }
+    }
+    private var learned by mutableStateOf(0)
 
     private var screen by mutableStateOf<Screen>(Screen.Home)
     private var model by mutableStateOf(SpeechModel.ACCURATE)
@@ -165,8 +169,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Every word the user fixed in the editor is remembered for all future videos. */
+    private fun learnFromEdits(): Int {
+        val ws = Regex("\\s+")
+        var n = 0
+        for (c in caps) {
+            val orig = converter.convert(c.latin).second
+            if (orig == c.text) continue
+            val lat = c.latin.split(ws).filter { it.isNotBlank() }
+            val ed = c.text.split(ws).filter { it.isNotBlank() }
+            val og = orig.split(ws).filter { it.isNotBlank() }
+            if (lat.size != ed.size || og.size != ed.size) continue
+            for (i in lat.indices) {
+                val k = TabrizConverter.key(lat[i]).lowercase()
+                val v = TabrizConverter.strip(ed[i]); val o = TabrizConverter.strip(og[i])
+                if (k.isEmpty() || v.isEmpty() || v == o || k.any { it.isDigit() }) continue
+                converter.learn(k, v); n++
+            }
+        }
+        if (n > 0) prefs.edit().putString("user_dict", converter.userJson()).apply()
+        return n
+    }
+
     private fun export() {
         val uri = videoUri ?: return
+        learned = try { learnFromEdits() } catch (e: Exception) { 0 }
         keepAwake(true)
         screen = Screen.Busy("ساخت ویدیو با کپشن…", 0f)
         job = lifecycleScope.launch {
@@ -307,7 +334,7 @@ class MainActivity : ComponentActivity() {
                     Slider(look.yFrac, { look = look.copy(yFrac = it) }, valueRange = 0.2f..0.9f, modifier = Modifier.height(24.dp))
                 }
             }
-            Text("روی هر خط بزن تا پیش‌نمایش ببینی؛ متن را مستقیم درست کن.", color = Color(0xFFB8C0C8), fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+            Text("روی هر خط بزن تا پیش‌نمایش ببینی؛ متن را مستقیم درست کن. هر کلمه‌ای اصلاح کنی، اپ یاد می‌گیرد و دفعه بعد خودش درست می‌نویسد.", color = Color(0xFFB8C0C8), fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
             val listState = rememberLazyListState()
             LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(caps, key = { i, c -> "${c.startMs}_$i" }) { i, c ->
@@ -342,6 +369,8 @@ class MainActivity : ComponentActivity() {
         Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             Text("ویدیو آماده شد ✓", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text("در گالری، پوشه Movies/TabrizCaptions ذخیره شد.", color = Color(0xFFB8C0C8), textAlign = TextAlign.Center)
+            if (learned > 0) Text("✓ $learned کلمه‌ای که اصلاح کردی یاد گرفته شد؛ از این به بعد خودکار درست نوشته می‌شود. (فرهنگ تو: ${converter.userCount()} کلمه)",
+                color = Color(0xFF7CD992), textAlign = TextAlign.Center, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(20.dp))
             Button(onClick = { share(f) }, Modifier.fillMaxWidth()) { Text("اشتراک‌گذاری") }
             Spacer(Modifier.height(8.dp))

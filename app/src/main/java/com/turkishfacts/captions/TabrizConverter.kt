@@ -15,6 +15,18 @@ class TabrizConverter(json: String) {
     private val finalMap = HashMap<Char, String>()
     private val punct = HashMap<Char, String>()
     private val suffix = ArrayList<Pair<Regex, String>>()
+    /** Words the user corrected in the editor: normalized Latin word -> Persian spelling. Wins over everything. */
+    private val user = HashMap<String, String>()
+
+    fun loadUser(json: String) {
+        try {
+            val o = JSONObject(json); val it = o.keys()
+            while (it.hasNext()) { val k = it.next(); user[k] = o.getString(k) }
+        } catch (e: Exception) { }
+    }
+    fun learn(latinWord: String, persian: String) { user[latinWord] = persian }
+    fun userJson(): String = JSONObject(user as Map<*, *>).toString()
+    fun userCount() = user.size
 
     init {
         val o = JSONObject(json)
@@ -88,6 +100,7 @@ class TabrizConverter(json: String) {
 
     fun wordFa(w: String): String {
         if (isDigits(w)) return faDigits(w)
+        user[w]?.let { return it }
         fa[w]?.let { return it }
         for (k in w.length - 1 downTo 3) {
             val stem = fa[w.substring(0, k)]
@@ -127,5 +140,9 @@ class TabrizConverter(json: String) {
         private val WS = Regex("\\s+")
         private val TOKEN = Regex("([A-Za-zƏəÖöÜüĞğİıIŞşÇçXxQq'-]+|\\d+|[^\\sA-Za-z\\d]+)")
         private val FIRST_LETTER = Regex("[A-Za-zƏəÖöÜüĞğİıIŞşÇçXxQq]")
+        private const val EDGE_PUNCT = "،.,؟?!:;«»\"'()[]…-"
+        /** Latin token as stored in Caption.latin -> dictionary key. */
+        fun key(token: String) = token.trim { it in EDGE_PUNCT || it.isWhitespace() }.replace("'", "")
+        fun strip(word: String) = word.trim { it in EDGE_PUNCT || it.isWhitespace() }
     }
 }
