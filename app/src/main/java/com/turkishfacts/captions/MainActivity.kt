@@ -18,6 +18,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -211,7 +213,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun HomeScreen() {
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> if (u != null) videoUri = u }
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("کپشن آذری تبریز", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Text("ویدیو بده، کپشن ترکی تبریز و ارومیه با خط فارسی و انیمیشن بگیر.",
                 color = Color(0xFFB8C0C8), fontSize = 14.sp)
