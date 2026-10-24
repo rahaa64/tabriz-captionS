@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
         if (u != null) { videoUri = u; screen = Screen.Home }
     }
 
-    private fun setCloud(on: Boolean) { cloud = on; prefs.edit().putBoolean("cloud", on).apply() }
+    private fun chooseCloud(on: Boolean) { cloud = on; prefs.edit().putBoolean("cloud", on).apply() }
 
     private fun refreshReady() { ready = SpeechModel.values().associateWith { mm.isReady(it) } }
 
@@ -218,9 +218,9 @@ class MainActivity : ComponentActivity() {
             Text("تشخیص گفتار", color = Color.White, fontWeight = FontWeight.Bold)
             Column(Modifier.fillMaxWidth().clip12().background(if (cloud) Color(0xFF2A3038) else Card)
                 .border(1.dp, if (cloud) Accent else Color.Transparent, RoundedCornerShape(12.dp))
-                .clickable { setCloud(true) }.padding(12.dp)) {
+                .clickable { chooseCloud(true) }.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = cloud, onClick = { setCloud(true) })
+                    RadioButton(selected = cloud, onClick = { chooseCloud(true) })
                     Column(Modifier.weight(1f)) {
                         Text("ElevenLabs Scribe — دقیق‌ترین (آنلاین)", color = Color.White)
                         Text("با کلید API حساب ElevenLabs خودت؛ هر دقیقه حدود ۳۳۰ اعتبار", color = Color(0xFFB8C0C8), fontSize = 12.sp)
@@ -238,8 +238,8 @@ class MainActivity : ComponentActivity() {
                 val on = !cloud && model == m
                 Row(Modifier.fillMaxWidth().clip12().background(if (on) Color(0xFF2A3038) else Card)
                     .border(1.dp, if (on) Accent else Color.Transparent, RoundedCornerShape(12.dp))
-                    .clickable { model = m; setCloud(false) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = on, onClick = { model = m; setCloud(false) })
+                    .clickable { model = m; chooseCloud(false) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = on, onClick = { model = m; chooseCloud(false) })
                     Column(Modifier.weight(1f)) {
                         Text(m.title, color = Color.White)
                         Text(if (ok) "دانلود شده ✓" else "هنوز دانلود نشده", color = if (ok) Color(0xFF7CD992) else Color(0xFFB8C0C8), fontSize = 12.sp)
