@@ -1,0 +1,24 @@
+name: Mirror speech models (run once)
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Whisper int8 models from sherpa-onnx (MIT / Apache-2.0)
+        run: |
+          set -e
+          for m in turbo small; do
+            curl -fsSL -o $m.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-$m.tar.bz2
+            tar xjf $m.tar.bz2 && rm $m.tar.bz2
+            cp sherpa-onnx-whisper-$m/$m-encoder.int8.onnx sherpa-onnx-whisper-$m/$m-decoder.int8.onnx sherpa-onnx-whisper-$m/$m-tokens.txt .
+            rm -rf sherpa-onnx-whisper-$m
+          done
+          ls -l *.onnx *.txt
+      - name: Upload to release models-v1
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release view models-v1 >/dev/null 2>&1 || gh release create models-v1 --title "Speech models" --notes "Whisper int8 models used by the app (downloaded once on the phone)."
+          gh release upload models-v1 turbo-encoder.int8.onnx turbo-decoder.int8.onnx turbo-tokens.txt small-encoder.int8.onnx small-decoder.int8.onnx small-tokens.txt --clobber
